@@ -1,4 +1,4 @@
-package javaFXStuff;
+package edu.wit.cs1050.finalProject.base;
 
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -18,7 +18,7 @@ import org.opencv.highgui.HighGui;
 import org.opencv.core.Rect;
 import java.util.List;
 
-public class JavaFXGame extends Application {
+public class CompProjectorMain extends Application {
 
     private VideoCapture capture;
 
