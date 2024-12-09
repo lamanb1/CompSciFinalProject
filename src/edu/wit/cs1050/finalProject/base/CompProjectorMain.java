@@ -22,9 +22,11 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class CompProjectorMain extends Application {
+public class CompProjectorMain extends Application 
+{
 
-    static {
+    static 
+    {
         System.loadLibrary(Core.NATIVE_LIBRARY_NAME); // Load OpenCV
     }
 
@@ -43,11 +45,12 @@ public class CompProjectorMain extends Application {
         primaryStage = stage;
         showMainMenu();
     }
-
+    
+    //Main menu stuffs
     private void showMainMenu() {
         Pane menuRoot = new Pane();
 
-        Text title = new Text("Tennis Ball Tracker Game");
+        Text title = new Text("THE NO GAME!!!");
         title.setFont(new Font(24));
         title.setFill(Color.BLACK);
         title.setLayoutX(250);
@@ -73,9 +76,10 @@ public class CompProjectorMain extends Application {
         trackerCircle.setCenterY(300);
         gameRoot.getChildren().add(trackerCircle);
 
-        // Initialize enemies on edges
+        // Starts enemies on edges
         enemies = new ArrayList<>();
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 5; i++) 
+        {
             spawnEnemy(gameRoot);
         }
 
@@ -88,9 +92,10 @@ public class CompProjectorMain extends Application {
         primaryStage.setScene(gameScene);
         primaryStage.setTitle("NO");
 
-        videoCapture = new VideoCapture(0); // Open the default camera
+        videoCapture = new VideoCapture(0); // Opens the default camera
 
-        if (!videoCapture.isOpened()) {
+        if (!videoCapture.isOpened()) 
+        {
             System.err.println("Error: Could not open camera.");
             Platform.exit();
             return;
@@ -99,13 +104,15 @@ public class CompProjectorMain extends Application {
         executorService = Executors.newSingleThreadExecutor();
         executorService.submit(() -> processVideo(gameRoot));
     }
-
-    private void spawnEnemy(Pane gameRoot) {
+    //As name implies spawns the enemy 
+    private void spawnEnemy(Pane gameRoot) 
+    {
         double x = 0, y = 0;
 
         // Randomly pick an edge for spawning
         int edge = (int) (Math.random() * 4);
-        switch (edge) {
+        switch (edge) 
+        {
             case 0: // Top edge
                 x = Math.random() * 800;
                 y = 20;
@@ -124,29 +131,32 @@ public class CompProjectorMain extends Application {
                 break;
         }
 
-        // Randomly decide between a normal enemy and an aggressive enemy
-        boolean whichEnemy = Math.random() > 0.8;  // 50% chance of being aggressive
+        // Randomly decide between a normal enemy and an follow enemy enemy
+        boolean whichEnemy = Math.random() > 0.8;  // 20% chance of being a follow enemy
 
         Enemy enemy;
-        if (whichEnemy) {
-            // Create an aggressive enemy that moves towards the player
+        if (whichEnemy) 
+        {
+            // Create a follow enemy that follows the player
             enemy = new FastEnemy(
                     x,
                     y,
                     15,
                     Color.GREEN,
-                    Math.random() * 10 - 2, // Random x-velocity
-                    Math.random() * 10 - 2  // Random y-velocity
+                    Math.random() * 10 - 2, //Speed x
+                    Math.random() * 10 - 2  //Speed y
             );
-        } else {
+        } 
+        else 
+        {
             // Create a normal enemy with random movement
             enemy = new NormalEnemy(
                     x,
                     y,
                     15,
                     Color.BLUE,
-                    Math.random() * 4 - 2, // Random x-velocity
-                    Math.random() * 4 - 2  // Random y-velocity
+                    Math.random() * 4 - 2, //Speed x
+                    Math.random() * 4 - 2  //Speed y
             );
         }
 
@@ -154,10 +164,13 @@ public class CompProjectorMain extends Application {
         gameRoot.getChildren().add(enemy.getShape());
     }
 
-    private void processVideo(Pane gameRoot) {
+    private void processVideo(Pane gameRoot) 
+    {
         Mat frame = new Mat();
-        while (videoCapture.isOpened()) {
-            if (!videoCapture.read(frame)) {
+        while (videoCapture.isOpened()) 
+        {
+            if (!videoCapture.read(frame)) 
+            {
                 System.err.println("Error: Could not read frame.");
                 break;
             }
@@ -165,11 +178,12 @@ public class CompProjectorMain extends Application {
             // Process frame to find the tennis ball
             Point ballCenter = detectTennisBall(frame);
 
-            if (ballCenter != null) {
-                // Flip x-coordinate for mirrored effect
+            if (ballCenter != null) 
+            {
+                
                 ballCenter.x = frame.width() - ballCenter.x;
 
-                // Smooth the movement
+                
                 smoothedX = smoothedX + (ballCenter.x - smoothedX) * 0.2;
                 smoothedY = smoothedY + (ballCenter.y - smoothedY) * 0.2;
 
@@ -177,11 +191,13 @@ public class CompProjectorMain extends Application {
                     trackerCircle.setCenterX(smoothedX);
                     trackerCircle.setCenterY(smoothedY);
 
-                    // Update enemy positions and check for collisions
-                    for (Enemy enemy : enemies) {
+                    // Updates enemy positions and check for collisions
+                    for (Enemy enemy : enemies) 
+                    {
                         enemy.move();
                         enemy.checkBounds(800, 600);
-                        if (checkCollision(trackerCircle, enemy.getShape())) {
+                        if (checkCollision(trackerCircle, enemy.getShape())) 
+                        {
                             handleCollision();
                         }
                     }
@@ -189,33 +205,37 @@ public class CompProjectorMain extends Application {
             }
         }
     }
-
-    private Point detectTennisBall(Mat frame) {
+    
+    //Detects the tennis ball and draws a box around it
+    private Point detectTennisBall(Mat frame) 
+    {
         Mat hsv = new Mat();
         Mat mask = new Mat();
 
-        // Convert to HSV color space
+        
         Imgproc.cvtColor(frame, hsv, Imgproc.COLOR_BGR2HSV);
 
-        // Define color range for a tennis ball (adjust values if necessary)
+        // The color range for the tennis ball
         Scalar lowerBound = new Scalar(29, 86, 6);
         Scalar upperBound = new Scalar(64, 255, 255);
 
-        // Create a mask for the color
+
         Core.inRange(hsv, lowerBound, upperBound, mask);
 
-        // Find contours
+        // Draws a bounding box around everything with such color
         Mat hierarchy = new Mat();
         java.util.List<MatOfPoint> contours = new java.util.ArrayList<>();
         Imgproc.findContours(mask, contours, hierarchy, Imgproc.RETR_TREE, Imgproc.CHAIN_APPROX_SIMPLE);
 
         Point ballCenter = null;
 
-        // Find the largest contour
+        // Find the largest bounding box
         double maxArea = 0;
-        for (MatOfPoint contour : contours) {
+        for (MatOfPoint contour : contours) 
+        {
             double area = Imgproc.contourArea(contour);
-            if (area > maxArea) {
+            if (area > maxArea) 
+            {
                 maxArea = area;
                 Rect boundingRect = Imgproc.boundingRect(contour);
                 ballCenter = new Point(boundingRect.x + boundingRect.width / 2.0,
@@ -225,39 +245,48 @@ public class CompProjectorMain extends Application {
 
         return ballCenter;
     }
-
-    private boolean checkCollision(Circle player, Circle enemy) {
+    //Checks the collision of the enemy and player
+    private boolean checkCollision(Circle player, Circle enemy) 
+    {
         double distance = Math.sqrt(Math.pow(player.getCenterX() - enemy.getCenterX(), 2) +
                 Math.pow(player.getCenterY() - enemy.getCenterY(), 2));
         return distance < (player.getRadius() + enemy.getRadius());
     }
+    //Ends game if collision is detected
+    private void handleCollision() 
+    {
+        Platform.runLater(() -> 
+        {
 
-    private void handleCollision() {
-        Platform.runLater(() -> {
-            // Stop camera and executor
-            if (videoCapture != null) {
+            if (videoCapture != null) 
+            {
                 videoCapture.release();
             }
-            if (executorService != null) {
+            if (executorService != null) 
+            {
                 executorService.shutdownNow();
             }
-            // Show main menu
+
             showMainMenu();
         });
     }
 
     @Override
-    public void stop() throws Exception {
-        if (videoCapture != null) {
+    public void stop() throws Exception 
+    {
+        if (videoCapture != null) 
+        {
             videoCapture.release();
         }
-        if (executorService != null) {
+        if (executorService != null) 
+        {
             executorService.shutdownNow();
         }
         super.stop();
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) 
+    {
         launch(args);
     }
 }
