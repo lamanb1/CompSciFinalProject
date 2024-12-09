@@ -22,11 +22,9 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class CompProjectorMain extends Application 
-{
+public class CompProjectorMain extends Application {
 
-    static 
-    {
+    static {
         System.loadLibrary(Core.NATIVE_LIBRARY_NAME); // Load OpenCV
     }
 
@@ -37,24 +35,31 @@ public class CompProjectorMain extends Application
 
     static double smoothedX = 0;
     static double smoothedY = 0;
+    private int score = 0; 
+    private int highScore = 0; // Track the highest score
+    private Timeline scoreTimeline; 
 
+    private Text noBallDetectedText;
+    private Text scoreText; 
+    private Text highScoreText; // Text to display the high score
     private Stage primaryStage;
+    private boolean ballDetected;
 
     @Override
     public void start(Stage stage) {
         primaryStage = stage;
         showMainMenu();
     }
-    
-    //Main menu stuffs
+
+    // Main menu stuff
     private void showMainMenu() {
         Pane menuRoot = new Pane();
 
         Text title = new Text("THE NO GAME!!!");
         title.setFont(new Font(24));
         title.setFill(Color.BLACK);
-        title.setLayoutX(250);
-        title.setLayoutY(200);
+        title.setLayoutX(300);
+        title.setLayoutY(250);
 
         Button startButton = new Button("Start Game");
         startButton.setLayoutX(350);
@@ -76,10 +81,33 @@ public class CompProjectorMain extends Application
         trackerCircle.setCenterY(300);
         gameRoot.getChildren().add(trackerCircle);
 
-        // Starts enemies on edges
+        // Create and display the score text
+        scoreText = new Text("Score: " + score);
+        scoreText.setFont(new Font(18));
+        scoreText.setFill(Color.BLACK);
+        scoreText.setLayoutX(10);
+        scoreText.setLayoutY(20);
+        gameRoot.getChildren().add(scoreText);
+
+        // Create and display the high score text
+        highScoreText = new Text("High Score: " + highScore);
+        highScoreText.setFont(new Font(18));
+        highScoreText.setFill(Color.BLACK);
+        highScoreText.setLayoutX(650);
+        highScoreText.setLayoutY(20);
+        gameRoot.getChildren().add(highScoreText);
+        
+        noBallDetectedText = new Text("No ball detected");
+        noBallDetectedText.setFont(new Font(24));
+        noBallDetectedText.setFill(Color.RED);
+        noBallDetectedText.setLayoutX(300);  // Center horizontally
+        noBallDetectedText.setLayoutY(300);  // Center vertically
+        noBallDetectedText.setVisible(false); // Initially hidden
+        gameRoot.getChildren().add(noBallDetectedText);
+
+        // Start enemies on edges
         enemies = new ArrayList<>();
-        for (int i = 0; i < 5; i++) 
-        {
+        for (int i = 0; i < 5; i++) {
             spawnEnemy(gameRoot);
         }
 
@@ -88,14 +116,18 @@ public class CompProjectorMain extends Application
         enemySpawnTimeline.setCycleCount(Timeline.INDEFINITE);
         enemySpawnTimeline.play();
 
+        // Set up a timeline to increase score every second
+        scoreTimeline = new Timeline(new KeyFrame(Duration.seconds(1), e -> increaseScore()));
+        scoreTimeline.setCycleCount(Timeline.INDEFINITE);
+        scoreTimeline.play();
+
         Scene gameScene = new Scene(gameRoot, 800, 600);
         primaryStage.setScene(gameScene);
         primaryStage.setTitle("NO");
 
         videoCapture = new VideoCapture(0); // Opens the default camera
 
-        if (!videoCapture.isOpened()) 
-        {
+        if (!videoCapture.isOpened()) {
             System.err.println("Error: Could not open camera.");
             Platform.exit();
             return;
@@ -104,15 +136,19 @@ public class CompProjectorMain extends Application
         executorService = Executors.newSingleThreadExecutor();
         executorService.submit(() -> processVideo(gameRoot));
     }
-    //As name implies spawns the enemy 
+
+    // As name implies, spawns the enemy
     private void spawnEnemy(Pane gameRoot) 
     {
+    	if(!ballDetected && score >= 2)
+    	{
+    		return;
+    	}
         double x = 0, y = 0;
 
         // Randomly pick an edge for spawning
         int edge = (int) (Math.random() * 4);
-        switch (edge) 
-        {
+        switch (edge) {
             case 0: // Top edge
                 x = Math.random() * 800;
                 y = 20;
@@ -131,7 +167,7 @@ public class CompProjectorMain extends Application
                 break;
         }
 
-        // Randomly decide between a normal enemy and an follow enemy enemy
+        // Randomly decide between a normal enemy and a follow enemy
         boolean whichEnemy = Math.random() > 0.8;  // 20% chance of being a follow enemy
 
         Enemy enemy;
@@ -143,8 +179,8 @@ public class CompProjectorMain extends Application
                     y,
                     15,
                     Color.GREEN,
-                    Math.random() * 10 - 2, //Speed x
-                    Math.random() * 10 - 2  //Speed y
+                    Math.random() * 10 - 2, // Speed x
+                    Math.random() * 10 - 2  // Speed y
             );
         } 
         else 
@@ -155,8 +191,8 @@ public class CompProjectorMain extends Application
                     y,
                     15,
                     Color.BLUE,
-                    Math.random() * 4 - 2, //Speed x
-                    Math.random() * 4 - 2  //Speed y
+                    Math.random() * 4 - 2, // Speed x
+                    Math.random() * 4 - 2  // Speed y
             );
         }
 
@@ -167,6 +203,7 @@ public class CompProjectorMain extends Application
     private void processVideo(Pane gameRoot) 
     {
         Mat frame = new Mat();
+        ballDetected = false;  
         while (videoCapture.isOpened()) 
         {
             if (!videoCapture.read(frame)) 
@@ -180,10 +217,10 @@ public class CompProjectorMain extends Application
 
             if (ballCenter != null) 
             {
-                
+                ballDetected = true;  // Ball detected in this frame
+
                 ballCenter.x = frame.width() - ballCenter.x;
 
-                
                 smoothedX = smoothedX + (ballCenter.x - smoothedX) * 0.2;
                 smoothedY = smoothedY + (ballCenter.y - smoothedY) * 0.2;
 
@@ -191,34 +228,38 @@ public class CompProjectorMain extends Application
                     trackerCircle.setCenterX(smoothedX);
                     trackerCircle.setCenterY(smoothedY);
 
-                    // Updates enemy positions and check for collisions
+                    // Update enemy positions and check for collisions
                     for (Enemy enemy : enemies) 
                     {
                         enemy.move();
                         enemy.checkBounds(800, 600);
-                        if (checkCollision(trackerCircle, enemy.getShape())) 
-                        {
+                        if (checkCollision(trackerCircle, enemy.getShape())) {
                             handleCollision();
                         }
                     }
                 });
+                noBallDetectedText.setVisible(false);
+            }
+            else 
+            {
+                ballDetected = false;  // No ball detected
+                noBallDetectedText.setVisible(true);
             }
         }
     }
-    
-    //Detects the tennis ball and draws a box around it
+
+
+    // Detects the tennis ball and draws a box around it
     private Point detectTennisBall(Mat frame) 
     {
         Mat hsv = new Mat();
         Mat mask = new Mat();
 
-        
         Imgproc.cvtColor(frame, hsv, Imgproc.COLOR_BGR2HSV);
 
         // The color range for the tennis ball
         Scalar lowerBound = new Scalar(29, 86, 6);
         Scalar upperBound = new Scalar(64, 255, 255);
-
 
         Core.inRange(hsv, lowerBound, upperBound, mask);
 
@@ -245,48 +286,105 @@ public class CompProjectorMain extends Application
 
         return ballCenter;
     }
-    //Checks the collision of the enemy and player
-    private boolean checkCollision(Circle player, Circle enemy) 
-    {
+
+    // Checks the collision of the enemy and player
+    private boolean checkCollision(Circle player, Circle enemy) {
         double distance = Math.sqrt(Math.pow(player.getCenterX() - enemy.getCenterX(), 2) +
                 Math.pow(player.getCenterY() - enemy.getCenterY(), 2));
         return distance < (player.getRadius() + enemy.getRadius());
     }
-    //Ends game if collision is detected
-    private void handleCollision() 
-    {
-        Platform.runLater(() -> 
-        {
 
-            if (videoCapture != null) 
-            {
+    // Ends game if collision is detected
+    private void handleCollision() {
+        Platform.runLater(() -> {
+            // Stop video capture and executor
+            if (videoCapture != null) {
                 videoCapture.release();
             }
-            if (executorService != null) 
-            {
+            if (executorService != null) {
                 executorService.shutdownNow();
             }
 
-            showMainMenu();
+            // Update high score if necessary
+            if (score > highScore) {
+                highScore = score;
+            }
+
+            
+            showDeathMenu();
         });
     }
 
-    @Override
-    public void stop() throws Exception 
-    {
-        if (videoCapture != null) 
+    // Show death menu
+    private void showDeathMenu() {
+        Pane deathMenuRoot = new Pane();
+
+        Text title = new Text("You Died!");
+        title.setFont(new Font(24));
+        title.setFill(Color.BLACK);
+        title.setLayoutX(325);
+        title.setLayoutY(200);
+
+        // Display score on death menu
+        Text scoreDisplay = new Text("Score: " + score);
+        scoreDisplay.setFont(new Font(18));
+        scoreDisplay.setFill(Color.BLACK);
+        scoreDisplay.setLayoutX(150);
+        scoreDisplay.setLayoutY(225);
+
+        // Display high score
+        Text highScoreDisplay = new Text("High Score: " + highScore);
+        highScoreDisplay.setFont(new Font(18));
+        highScoreDisplay.setFill(Color.BLACK);
+        highScoreDisplay.setLayoutX(500);
+        highScoreDisplay.setLayoutY(225);
+
+        Button restartButton = new Button("Restart Game");
+        restartButton.setLayoutX(350);
+        restartButton.setLayoutY(350);
+        restartButton.setOnAction(event -> restartGame());
+
+        Button mainMenuButton = new Button("Main Menu");
+        mainMenuButton.setLayoutX(350);
+        mainMenuButton.setLayoutY(400);
+        mainMenuButton.setOnAction(event -> showMainMenu());
+
+        deathMenuRoot.getChildren().addAll(title, scoreDisplay, highScoreDisplay, restartButton, mainMenuButton);
+
+        Scene deathMenuScene = new Scene(deathMenuRoot, 800, 600);
+        primaryStage.setScene(deathMenuScene);
+        primaryStage.setTitle("Game Over");
+        primaryStage.show();
+        score = 0;  
+        enemies.clear();
+        smoothedX = 0;
+        smoothedY = 0;
+
+        // Stops the score from going up
+        if (scoreTimeline != null) 
         {
-            videoCapture.release();
+            scoreTimeline.stop();
         }
-        if (executorService != null) 
-        {
-            executorService.shutdownNow();
-        }
-        super.stop();
+
+     
     }
 
-    public static void main(String[] args) 
-    {
+    // Restart the game
+    private void restartGame() {
+        startGame();
+    }
+
+    // Increase score over time
+    private void increaseScore() {
+    	if(ballDetected)
+    	{
+    		score++;
+            Platform.runLater(() -> scoreText.setText("Score: " + score));
+    	}
+
+    }
+
+    public static void main(String[] args) {
         launch(args);
     }
 }
