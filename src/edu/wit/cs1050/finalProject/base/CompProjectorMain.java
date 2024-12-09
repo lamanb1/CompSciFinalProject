@@ -22,6 +22,22 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+/* Ball Frenzy is a game where you use a tennis ball to control the player on screen
+ * You need a camera and a tennis Ball
+ * 
+ * 
+ * 
+ * Known bugs -- Randomly die - caused by an error of camera jittering or not being able to capture the frame
+ * Also could be caused by it detecting a large amount of yellow somewhere else for a split second teleporting
+ * the ball there then back instantly causing the player to die: Also seems to most after
+ * you restart the game not on the first go so if you completely close the game and start after every death
+ * seems to happen a lot less. : Also what causes error message in console I believe- NO known fix
+ * 
+ * Jittering of charector - Caused by color not being consistent of the ball so the detection is off
+ * Could fix by using object tracking as well as color tracking but then if you hit the edges of the camera
+ * it wont work So don't really know full fix yet
+ * */
+
 public class CompProjectorMain extends Application {
 
     static {
@@ -36,12 +52,12 @@ public class CompProjectorMain extends Application {
     static double smoothedX = 0;
     static double smoothedY = 0;
     private int score = 0; 
-    private int highScore = 0; // Track the highest score
+    private int highScore = 0; 
     private Timeline scoreTimeline; 
 
     private Text noBallDetectedText;
     private Text scoreText; 
-    private Text highScoreText; // Text to display the high score
+    private Text highScoreText; 
     private Stage primaryStage;
     private boolean ballDetected;
 
@@ -55,7 +71,7 @@ public class CompProjectorMain extends Application {
     private void showMainMenu() {
         Pane menuRoot = new Pane();
 
-        Text title = new Text("THE NO GAME!!!");
+        Text title = new Text("BALL FRENZY!!!");
         title.setFont(new Font(24));
         title.setFill(Color.WHITE);
         title.setLayoutX(300);
@@ -66,19 +82,25 @@ public class CompProjectorMain extends Application {
         startButton.setLayoutY(300);
         startButton.setOnAction(event -> startGame());
 
-        menuRoot.getChildren().addAll(title, startButton);
+        Button instructionsButton = new Button("Instructions");
+        instructionsButton.setLayoutX(350);
+        instructionsButton.setLayoutY(350);
+        instructionsButton.setOnAction(event -> showInstructionsMenu());
+
+        menuRoot.getChildren().addAll(title, startButton, instructionsButton);
 
         Scene menuScene = new Scene(menuRoot, 800, 600);
-        menuScene.getStylesheets().add(getClass().getResource("style.css").toExternalForm()); // add stylesheet
+        menuScene.getStylesheets().add(getClass().getResource("style.css").toExternalForm()); // Add stylesheet
         primaryStage.setScene(menuScene);
         primaryStage.setTitle("Main Menu");
         primaryStage.show();
     }
 
+
     private void startGame() {
         Pane gameRoot = new Pane();
         trackerCircle = new Circle(10, Color.RED);
-        trackerCircle.setCenterX(400); // Spawn ball in the center
+        trackerCircle.setCenterX(400); 
         trackerCircle.setCenterY(300);
         gameRoot.getChildren().add(trackerCircle);
 
@@ -98,6 +120,7 @@ public class CompProjectorMain extends Application {
         highScoreText.setLayoutY(20);
         gameRoot.getChildren().add(highScoreText);
         
+        // Create and dont display the NO ball detected text
         noBallDetectedText = new Text("No ball detected");
         noBallDetectedText.setFont(new Font(24));
         noBallDetectedText.setFill(Color.RED);
@@ -121,12 +144,13 @@ public class CompProjectorMain extends Application {
         scoreTimeline = new Timeline(new KeyFrame(Duration.seconds(1), e -> increaseScore()));
         scoreTimeline.setCycleCount(Timeline.INDEFINITE);
         scoreTimeline.play();
-
+        
+        //Sets up scene
         Scene gameScene = new Scene(gameRoot, 800, 600);
         primaryStage.setScene(gameScene);
-        primaryStage.setTitle("NO");
+        primaryStage.setTitle("Ball Frenzy");
 
-        videoCapture = new VideoCapture(0); // Opens the default camera
+        videoCapture = new VideoCapture(0); // Opens the default camera can change based on camera 1 = next camera and so on
 
         if (!videoCapture.isOpened()) {
             System.err.println("Error: Could not open camera.");
@@ -137,11 +161,53 @@ public class CompProjectorMain extends Application {
         executorService = Executors.newSingleThreadExecutor();
         executorService.submit(() -> processVideo(gameRoot));
     }
+    
+    //Instructions Menu
+    private void showInstructionsMenu() 
+    {
+        Pane instructionsRoot = new Pane();
+
+        Text title = new Text("Instructions");
+        title.setFont(new Font(24));
+        title.setFill(Color.WHITE);
+        title.setLayoutX(300);
+        title.setLayoutY(100);
+
+        // Add instructions text
+        Text instructions = new Text(
+            "1. Use a tennis ball to control the red circle on the screen.\n" +
+            "2. Avoid enemies and survive as long as you can.\n" +
+            "3. Your score increases every second while the ball is detected.\n" +
+            "4. If the red circle collides with an enemy, the game ends.\n" +
+            "5. Stay safe and aim for the highest score!\n\n\n" +
+            "Tips:\nStay towards the middle so the ball doesnt bug out!\nHave good lighting on the ball so its less lagy!"
+            
+            
+        );
+        instructions.setFont(new Font(18));
+        instructions.setFill(Color.WHITE);
+        instructions.setLayoutX(100);
+        instructions.setLayoutY(150);
+
+        Button backButton = new Button("Back to Main Menu");
+        backButton.setLayoutX(350);
+        backButton.setLayoutY(400);
+        backButton.setOnAction(event -> showMainMenu());
+
+        instructionsRoot.getChildren().addAll(title, instructions, backButton);
+
+        Scene instructionsScene = new Scene(instructionsRoot, 800, 600);
+        instructionsScene.getStylesheets().add(getClass().getResource("style.css").toExternalForm()); // Add stylesheet
+        primaryStage.setScene(instructionsScene);
+        primaryStage.setTitle("Instructions");
+        primaryStage.show();
+    }
+
 
     // As name implies, spawns the enemy
     private void spawnEnemy(Pane gameRoot) 
     {
-    	if(!ballDetected && score >= 2)
+    	if(!ballDetected && enemies.size() >= 5)
     	{
     		return;
     	}
@@ -168,11 +234,12 @@ public class CompProjectorMain extends Application {
                 break;
         }
 
-        // Randomly decide between a normal enemy and a follow enemy
-        boolean whichEnemy = Math.random() > 0.8;  // 20% chance of being a follow enemy
+        // Randomly decide between Enemys
+        double Random = Math.random(); 
+        
 
         Enemy enemy;
-        if (whichEnemy) 
+        if (Random > 0.8) //20% chance for a follow enemy
         {
             // Create a follow enemy that follows the player
             enemy = new FastEnemy(
@@ -180,11 +247,23 @@ public class CompProjectorMain extends Application {
                     y,
                     15,
                     Color.GREEN,
-                    Math.random() * 10 - 2, // Speed x
-                    Math.random() * 10 - 2  // Speed y
+                    Math.random() * 6 - 2, // Speed x
+                    Math.random() * 6 - 2  // Speed y
             );
         } 
-        else 
+        else if(Random > 0.5)// 30% chance for a fast 1 direction enemy
+        {
+        	//Create a FastBounceEnemy that only moves in 1 direction but fast
+        	enemy = new FastBounceEnemy(
+                    x,
+                    y,
+                    15,
+                    Color.PURPLE,
+                    Math.random() * 6 + 4, // Speed x
+                    Math.random() * 6 + 4  // Speed y
+                    );
+        }
+        else //50% chance for a normal enemy
         {
             // Create a normal enemy with random movement
             enemy = new NormalEnemy(
@@ -289,20 +368,25 @@ public class CompProjectorMain extends Application {
     }
 
     // Checks the collision of the enemy and player
-    private boolean checkCollision(Circle player, Circle enemy) {
+    private boolean checkCollision(Circle player, Circle enemy) 
+    {
         double distance = Math.sqrt(Math.pow(player.getCenterX() - enemy.getCenterX(), 2) +
-                Math.pow(player.getCenterY() - enemy.getCenterY(), 2));
+        		Math.pow(player.getCenterY() - enemy.getCenterY(), 2));
         return distance < (player.getRadius() + enemy.getRadius());
     }
 
     // Ends game if collision is detected
-    private void handleCollision() {
-        Platform.runLater(() -> {
+    private void handleCollision() 
+    {
+        Platform.runLater(() -> 
+        {
             // Stop video capture and executor
-            if (videoCapture != null) {
+            if (videoCapture != null) 
+            {
                 videoCapture.release();
             }
-            if (executorService != null) {
+            if (executorService != null) 
+            {
                 executorService.shutdownNow();
             }
 
@@ -317,7 +401,8 @@ public class CompProjectorMain extends Application {
     }
 
     // Show death menu
-    private void showDeathMenu() {
+    private void showDeathMenu() 
+    {
         Pane deathMenuRoot = new Pane();
         deathMenuRoot.getStylesheets().add(getClass().getResource("style.css").toExternalForm()); // add stylesheet
 
@@ -372,12 +457,14 @@ public class CompProjectorMain extends Application {
     }
 
     // Restart the game
-    private void restartGame() {
+    private void restartGame() 
+    {
         startGame();
     }
 
     // Increase score over time
-    private void increaseScore() {
+    private void increaseScore() 
+    {
     	if(ballDetected)
     	{
     		score++;
@@ -386,7 +473,8 @@ public class CompProjectorMain extends Application {
 
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) 
+    {
         launch(args);
     }
 }
