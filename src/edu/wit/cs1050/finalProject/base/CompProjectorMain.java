@@ -1,134 +1,260 @@
 package edu.wit.cs1050.finalProject.base;
 
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.scene.Scene;
-import javafx.scene.image.Image;
-import javafx.scene.image.ImageView;
+import javafx.scene.control.Button;
 import javafx.scene.layout.Pane;
+import javafx.scene.paint.Color;
+import javafx.scene.shape.Circle;
+import javafx.scene.text.Font;
+import javafx.scene.text.Text;
 import javafx.stage.Stage;
-import org.opencv.core.Core;
-import org.opencv.core.Mat;
-import org.opencv.core.MatOfPoint;
-import org.opencv.core.Scalar;
-import org.opencv.core.Size;
+import javafx.util.Duration;
+import org.opencv.core.*;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.videoio.VideoCapture;
-import org.opencv.highgui.HighGui;
-import org.opencv.core.Rect;
+
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class CompProjectorMain extends Application {
 
-    private VideoCapture capture;
-
-    @Override
-    public void start(Stage primaryStage) {
-        // Create a Pane layout for JavaFX
-        Pane pane = new Pane();  // Pane allows absolute positioning of children
-
-        // Set up the mouse click event to place the image where you click
-        pane.setOnMouseClicked(e -> {
-            // When the pane is clicked, we will show a PNG image at the click position
-            double xPos = e.getX(); // Get the x-coordinate of the click
-            double yPos = e.getY(); // Get the y-coordinate of the click
-
-            // Load the PNG image (make sure to provide the correct path to your .png image)
-            Image image = new Image("file:/C:/Users/ericw/Downloads/pixil-frame-0%20(16).png"); // Replace with your PNG image path
-            ImageView imageView = new ImageView(image);
-
-            // Resize the image (adjust values to make it smaller or larger)
-            imageView.setFitWidth(10); // Set width to 50 pixels (resize the image)
-            imageView.setFitHeight(10); // Set height to 50 pixels (resize the image)
-            imageView.setPreserveRatio(true); // Maintain the aspect ratio
-
-            // Set the image position at the click location
-            imageView.setX(xPos - imageView.getFitWidth() / 2); // Center the image on the click point
-            imageView.setY(yPos - imageView.getFitHeight() / 2); // Center the image on the click point
-
-            // Add the image to the pane
-            pane.getChildren().add(imageView);
-        });
-
-        // Create a scene with the pane layout
-        Scene scene = new Scene(pane, 600, 400);
-
-        // Set up and display the primary stage
-        primaryStage.setTitle("JavaFX Game");
-        primaryStage.setScene(scene);
-        primaryStage.show();
-
-        // Start OpenCV in a new thread to capture and display frames
-        new Thread(this::startCamera).start();
+    static {
+        System.loadLibrary(Core.NATIVE_LIBRARY_NAME); // Load OpenCV
     }
 
-    public void startCamera() {
-        // Load OpenCV native library
-        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+    private VideoCapture videoCapture;
+    private Circle trackerCircle;
+    private ExecutorService executorService;
+    private List<Enemy> enemies;
 
-        // Set up VideoCapture to use the default camera (ID 0)
-        capture = new VideoCapture(0);
-        if (!capture.isOpened()) {
-            System.out.println("Error: Camera not found.");
+    static double smoothedX = 0;
+    static double smoothedY = 0;
+
+    private Stage primaryStage;
+
+    @Override
+    public void start(Stage stage) {
+        primaryStage = stage;
+        showMainMenu();
+    }
+
+    private void showMainMenu() {
+        Pane menuRoot = new Pane();
+
+        Text title = new Text("Tennis Ball Tracker Game");
+        title.setFont(new Font(24));
+        title.setFill(Color.BLACK);
+        title.setLayoutX(250);
+        title.setLayoutY(200);
+
+        Button startButton = new Button("Start Game");
+        startButton.setLayoutX(350);
+        startButton.setLayoutY(300);
+        startButton.setOnAction(event -> startGame());
+
+        menuRoot.getChildren().addAll(title, startButton);
+
+        Scene menuScene = new Scene(menuRoot, 800, 600);
+        primaryStage.setScene(menuScene);
+        primaryStage.setTitle("Main Menu");
+        primaryStage.show();
+    }
+
+    private void startGame() {
+        Pane gameRoot = new Pane();
+        trackerCircle = new Circle(10, Color.RED);
+        trackerCircle.setCenterX(400); // Spawn ball in the center
+        trackerCircle.setCenterY(300);
+        gameRoot.getChildren().add(trackerCircle);
+
+        // Initialize enemies on edges
+        enemies = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            spawnEnemy(gameRoot);
+        }
+
+        // Set up a timeline to add new enemies every 3 seconds
+        Timeline enemySpawnTimeline = new Timeline(new KeyFrame(Duration.seconds(3), e -> spawnEnemy(gameRoot)));
+        enemySpawnTimeline.setCycleCount(Timeline.INDEFINITE);
+        enemySpawnTimeline.play();
+
+        Scene gameScene = new Scene(gameRoot, 800, 600);
+        primaryStage.setScene(gameScene);
+        primaryStage.setTitle("NO");
+
+        videoCapture = new VideoCapture(0); // Open the default camera
+
+        if (!videoCapture.isOpened()) {
+            System.err.println("Error: Could not open camera.");
+            Platform.exit();
             return;
         }
 
-        // Continuously capture and display frames from the camera
-        captureAndDisplayFrames();
+        executorService = Executors.newSingleThreadExecutor();
+        executorService.submit(() -> processVideo(gameRoot));
     }
 
-    private void captureAndDisplayFrames() {
+    private void spawnEnemy(Pane gameRoot) {
+        double x = 0, y = 0;
+
+        // Randomly pick an edge for spawning
+        int edge = (int) (Math.random() * 4);
+        switch (edge) {
+            case 0: // Top edge
+                x = Math.random() * 800;
+                y = 20;
+                break;
+            case 1: // Bottom edge
+                x = Math.random() * 800;
+                y = 580;
+                break;
+            case 2: // Left edge
+                x = 20;
+                y = Math.random() * 600;
+                break;
+            case 3: // Right edge
+                x = 780;
+                y = Math.random() * 600;
+                break;
+        }
+
+        // Randomly decide between a normal enemy and an aggressive enemy
+        boolean whichEnemy = Math.random() > 0.8;  // 50% chance of being aggressive
+
+        Enemy enemy;
+        if (whichEnemy) {
+            // Create an aggressive enemy that moves towards the player
+            enemy = new FastEnemy(
+                    x,
+                    y,
+                    15,
+                    Color.GREEN,
+                    Math.random() * 10 - 2, // Random x-velocity
+                    Math.random() * 10 - 2  // Random y-velocity
+            );
+        } else {
+            // Create a normal enemy with random movement
+            enemy = new NormalEnemy(
+                    x,
+                    y,
+                    15,
+                    Color.BLUE,
+                    Math.random() * 4 - 2, // Random x-velocity
+                    Math.random() * 4 - 2  // Random y-velocity
+            );
+        }
+
+        enemies.add(enemy);
+        gameRoot.getChildren().add(enemy.getShape());
+    }
+
+    private void processVideo(Pane gameRoot) {
         Mat frame = new Mat();
-        Mat hsvFrame = new Mat();
-        Mat mask = new Mat();
-        Mat outputFrame = new Mat();
+        while (videoCapture.isOpened()) {
+            if (!videoCapture.read(frame)) {
+                System.err.println("Error: Could not read frame.");
+                break;
+            }
 
-        while (true) {
-            if (capture.read(frame)) {
-                // Convert frame to HSV color space
-                Imgproc.cvtColor(frame, hsvFrame, Imgproc.COLOR_BGR2HSV);
+            // Process frame to find the tennis ball
+            Point ballCenter = detectTennisBall(frame);
 
-                // Define the range of yellow color in HSV
-                Scalar lowerYellow = new Scalar(20, 100, 100);  // Lower bound for yellow
-                Scalar upperYellow = new Scalar(40, 255, 255);  // Upper bound for yellow
+            if (ballCenter != null) {
+                // Flip x-coordinate for mirrored effect
+                ballCenter.x = frame.width() - ballCenter.x;
 
-                // Threshold the image to get only yellow regions
-                Core.inRange(hsvFrame, lowerYellow, upperYellow, mask);
+                // Smooth the movement
+                smoothedX = smoothedX + (ballCenter.x - smoothedX) * 0.2;
+                smoothedY = smoothedY + (ballCenter.y - smoothedY) * 0.2;
 
-                // Perform morphological operations (optional) to remove noise and smooth the mask
-                Imgproc.erode(mask, mask, new Mat(), new org.opencv.core.Point(-1, -1), 2);
-                Imgproc.dilate(mask, mask, new Mat(), new org.opencv.core.Point(-1, -1), 2);
+                Platform.runLater(() -> {
+                    trackerCircle.setCenterX(smoothedX);
+                    trackerCircle.setCenterY(smoothedY);
 
-                // Find contours in the mask
-                List<MatOfPoint> contours = new java.util.ArrayList<>();
-                Imgproc.findContours(mask, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
-
-                // Loop through all contours to find the tennis ball
-                for (MatOfPoint contour : contours) {
-                    // Calculate the area of each contour
-                    double area = Imgproc.contourArea(contour);
-                    if (area > 100) {  // Filter out small contours (noise)
-                        // Get the bounding box around the contour
-                        Rect boundingBox = Imgproc.boundingRect(contour);
-
-                        // Draw the bounding box around the detected tennis ball
-                        Imgproc.rectangle(frame, boundingBox.tl(), boundingBox.br(), new Scalar(0, 255, 0), 2);
+                    // Update enemy positions and check for collisions
+                    for (Enemy enemy : enemies) {
+                        enemy.move();
+                        enemy.checkBounds(800, 600);
+                        if (checkCollision(trackerCircle, enemy.getShape())) {
+                            handleCollision();
+                        }
                     }
-                }
+                });
+            }
+        }
+    }
 
-                // Show the processed frame in an OpenCV window
-                HighGui.imshow("Camera Feed", frame);
+    private Point detectTennisBall(Mat frame) {
+        Mat hsv = new Mat();
+        Mat mask = new Mat();
 
-                // Break the loop if the user presses any key
-                if (HighGui.waitKey(1) >= 0) {
-                    break;
-                }
+        // Convert to HSV color space
+        Imgproc.cvtColor(frame, hsv, Imgproc.COLOR_BGR2HSV);
+
+        // Define color range for a tennis ball (adjust values if necessary)
+        Scalar lowerBound = new Scalar(29, 86, 6);
+        Scalar upperBound = new Scalar(64, 255, 255);
+
+        // Create a mask for the color
+        Core.inRange(hsv, lowerBound, upperBound, mask);
+
+        // Find contours
+        Mat hierarchy = new Mat();
+        java.util.List<MatOfPoint> contours = new java.util.ArrayList<>();
+        Imgproc.findContours(mask, contours, hierarchy, Imgproc.RETR_TREE, Imgproc.CHAIN_APPROX_SIMPLE);
+
+        Point ballCenter = null;
+
+        // Find the largest contour
+        double maxArea = 0;
+        for (MatOfPoint contour : contours) {
+            double area = Imgproc.contourArea(contour);
+            if (area > maxArea) {
+                maxArea = area;
+                Rect boundingRect = Imgproc.boundingRect(contour);
+                ballCenter = new Point(boundingRect.x + boundingRect.width / 2.0,
+                        boundingRect.y + boundingRect.height / 2.0);
             }
         }
 
-        // Release the capture and close all OpenCV windows
-        capture.release();
-        HighGui.destroyAllWindows();
+        return ballCenter;
+    }
+
+    private boolean checkCollision(Circle player, Circle enemy) {
+        double distance = Math.sqrt(Math.pow(player.getCenterX() - enemy.getCenterX(), 2) +
+                Math.pow(player.getCenterY() - enemy.getCenterY(), 2));
+        return distance < (player.getRadius() + enemy.getRadius());
+    }
+
+    private void handleCollision() {
+        Platform.runLater(() -> {
+            // Stop camera and executor
+            if (videoCapture != null) {
+                videoCapture.release();
+            }
+            if (executorService != null) {
+                executorService.shutdownNow();
+            }
+            // Show main menu
+            showMainMenu();
+        });
+    }
+
+    @Override
+    public void stop() throws Exception {
+        if (videoCapture != null) {
+            videoCapture.release();
+        }
+        if (executorService != null) {
+            executorService.shutdownNow();
+        }
+        super.stop();
     }
 
     public static void main(String[] args) {
