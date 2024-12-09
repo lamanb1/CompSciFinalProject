@@ -1,0 +1,10 @@
+/* styles.css */
+.button {
+    -fx-background-color: #ff6347;
+    -fx-text-fill: white;
+	-fx-font-weight: bold;
+}
+
+.root {
+    -fx-background-color: #282828;
+}

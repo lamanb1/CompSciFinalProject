@@ -69,6 +69,7 @@ public class CompProjectorMain extends Application {
         menuRoot.getChildren().addAll(title, startButton);
 
         Scene menuScene = new Scene(menuRoot, 800, 600);
+        menuScene.getStylesheets().add(getClass().getResource("style.css").toExternalForm()); // add stylesheet
         primaryStage.setScene(menuScene);
         primaryStage.setTitle("Main Menu");
         primaryStage.show();
