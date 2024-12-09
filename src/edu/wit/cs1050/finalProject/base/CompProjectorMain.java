@@ -57,7 +57,7 @@ public class CompProjectorMain extends Application {
 
         Text title = new Text("THE NO GAME!!!");
         title.setFont(new Font(24));
-        title.setFill(Color.BLACK);
+        title.setFill(Color.WHITE);
         title.setLayoutX(300);
         title.setLayoutY(250);
 
@@ -319,24 +319,25 @@ public class CompProjectorMain extends Application {
     // Show death menu
     private void showDeathMenu() {
         Pane deathMenuRoot = new Pane();
+        deathMenuRoot.getStylesheets().add(getClass().getResource("style.css").toExternalForm()); // add stylesheet
 
         Text title = new Text("You Died!");
         title.setFont(new Font(24));
-        title.setFill(Color.BLACK);
+        title.setFill(Color.WHITE);
         title.setLayoutX(325);
         title.setLayoutY(200);
 
         // Display score on death menu
         Text scoreDisplay = new Text("Score: " + score);
         scoreDisplay.setFont(new Font(18));
-        scoreDisplay.setFill(Color.BLACK);
+        scoreDisplay.setFill(Color.WHITE);
         scoreDisplay.setLayoutX(150);
         scoreDisplay.setLayoutY(225);
 
         // Display high score
         Text highScoreDisplay = new Text("High Score: " + highScore);
         highScoreDisplay.setFont(new Font(18));
-        highScoreDisplay.setFill(Color.BLACK);
+        highScoreDisplay.setFill(Color.WHITE);
         highScoreDisplay.setLayoutX(500);
         highScoreDisplay.setLayoutY(225);
 
